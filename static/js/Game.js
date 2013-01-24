@@ -82,23 +82,16 @@ function drawChessGrid(){
  * @return {}     
  */
 function getGridRowCol(pos){
-    var cursorx = pos[0];
+	var cursorx = pos[0];
     var cursory = pos[1];
-    var start_col = Math.ceil((cursorx-out_width) / cell_width);
-    var start_row = Math.ceil((cursory-out_width) / cell_width);
-
+    var start_col = Math.floor((cursorx-out_width) / cell_width);
+    var start_row = Math.floor((cursory-out_width) / cell_width);
     if (((cursorx-out_width) % cell_width) > (cell_width/2)) {
-		start_col++;
-	}
-	if (((cursory-out_width) % cell_width) > (cell_width/2)) {
-		start_row++;
-	}
-
-    if(start_row < 0 ) start_row = 0;
-    if(start_col < 0) start_col = 0;
-    if(start_row > row_count) start_row = row_count;
-    if(start_col > col_count) start_col = col_count;
-
+        start_col++;
+    }
+    if (((cursory-out_width) % cell_width) > (cell_width/2)) {
+        start_row++;
+    }
     return [start_row, start_col]
 }
 
@@ -129,8 +122,8 @@ function getCurPosition(e) {
  */
 function drawPiece(row, col, color){
 	var key = 'piece-'+row+'-'+col;
-	row = row-1;
-	col = col-1;
+	row = row;
+	col = col;
 	var dx = out_width + col*cell_width - (cell_width-piece_width)/2;
 	var dy = out_width + row*cell_width - (cell_width-piece_width)/2;
 	var imgurl = piece_imgs[color-1];
@@ -141,7 +134,7 @@ function drawPiece(row, col, color){
     	.attr('x', dx)
     	.attr('y', dy)
     	.attr('id', key);
-    Cheng3.Pieces[row][col] = color;
+    // Cheng3.Pieces[row][col] = color;
 }
 /**
  * 选中棋子
@@ -156,11 +149,14 @@ function gameClickHandler(e){
 	var rowcol = getGridRowCol(pos);
     var row = rowcol[0];
     var col = rowcol[1];
-    console.log(row+','+col);
+    var key = row+'-'+col;
+    if (!Cheng3.Pos2IdMap[key]){
+    	return;
+    }
+  	drawPiece(row, col, my_piece_color);
     // if(Cheng3.Pieces[row-1][col-1] > 0){
     // 	return false;
     // }
-  	drawPiece(row, col, my_piece_color);
     	
 };
 
