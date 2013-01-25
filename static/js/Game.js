@@ -69,11 +69,8 @@ function drawChessGrid(){
 	}	
 
 	// 初始棋子数据
-	for(var i=0; i<row_count; i++){
-	    Cheng3.Pieces[i] = new Array();
-	    for(j=0; j<col_count; j++){
-	        Cheng3.Pieces[i][j] = 0;
-	    }
+	for(var i=0; i<24; i++){
+	    Cheng3.Pieces[i] = 0;
 	}
 }
 /**
@@ -114,28 +111,7 @@ function getCurPosition(e) {
     return [x, y];
 } 
 
-/**
- * 在第几行几列的位置上画棋子
- * @param  {int} row  从0开始
- * @param  {int} col  从0开始
- * @return {bool}     
- */
-function drawPiece(row, col, color){
-	var key = 'piece-'+row+'-'+col;
-	row = row;
-	col = col;
-	var dx = out_width + col*cell_width - (cell_width-piece_width)/2;
-	var dy = out_width + row*cell_width - (cell_width-piece_width)/2;
-	var imgurl = piece_imgs[color-1];
-	chess_svg.append('svg:image')
-    	.attr('width', piece_width)
-    	.attr('height', piece_width)
-    	.attr('xlink:href', imgurl)
-    	.attr('x', dx)
-    	.attr('y', dy)
-    	.attr('id', key);
-    // Cheng3.Pieces[row][col] = color;
-}
+
 /**
  * 选中棋子
  * @param  {event} e 
@@ -149,11 +125,14 @@ function gameClickHandler(e){
 	var rowcol = getGridRowCol(pos);
     var row = rowcol[0];
     var col = rowcol[1];
-    var key = row+'-'+col;
-    if (!Cheng3.Pos2IdMap[key]){
-    	return;
+    var c3 = new Cheng3(row, col, my_piece_color);
+    if(c3.canPut()){
+    	c3.putPiece();
+
+    	if(c3.isCheng3()){
+    		alert('cheng3.');
+    	}
     }
-  	drawPiece(row, col, my_piece_color);
     // if(Cheng3.Pieces[row-1][col-1] > 0){
     // 	return false;
     // }

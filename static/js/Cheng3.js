@@ -24,8 +24,48 @@ var Cheng3 = function (row, col, color) {
 	 * @return {bool} 
 	 */
 	this.canPut = function(){
-
+		var key = this.row+'-'+this.col;
+		if(!Cheng3.Pos2IdMap[key]){
+			return false;
+		}
+		var pid = Cheng3.Pos2IdMap[key];
+		if(Cheng3.Pieces[pid-1] != 0){
+			return false;
+		}
 		return true;
+	}
+	/**
+	 * 在此位置放置棋子
+	 * @return {} 
+	 */
+	this.putPiece = function(){
+		var key = this.row+'-'+this.col;
+		var pid = Cheng3.Pos2IdMap[key];
+		Cheng3.Pieces[pid-1] = this.color;
+		this._drawPiece();
+	}
+
+
+	/**
+	 * 判断该位置能否成三
+	 * @return {bool} 
+	 */
+	this.isCheng3 = function(){
+		var key = this.row+'-'+this.col;
+		if(!Cheng3.Pos2IdMap[key]){
+			return false;
+		}
+		var pid = Cheng3.Pos2IdMap[key];
+		for (var i = Cheng3.AllCheng3Ids.length - 1; i >= 0; i--) {
+				var ids = Cheng3.AllCheng3Ids[i];
+				if($.inArray(pid, ids) > -1){
+					if(Cheng3.Pieces[ids[0]-1] == this.color && Cheng3.Pieces[ids[1]-1] == this.color &&
+							Cheng3.Pieces[ids[2]-1] == this.color){
+						return true;
+					}
+				}
+		};
+		return false;	
 	}
 
 	/**
@@ -47,11 +87,22 @@ var Cheng3 = function (row, col, color) {
 	}
 	/**
 	 * 移除此棋子
+	 * @param status 
 	 * @return {bool} 
 	 */
 	this.remove = function(){
+		var key = this.row+'-'+this.col;
+		if(!Cheng3.Pos2IdMap[key]){
+			return false;
+		}
+		var pid = Cheng3.Pos2IdMap[key];
+
 		d3.select('#'+this.key).remove();
-		delete ChessPiece.PiecesMap[this.row+'-'+this.col];
+		if (Cheng3.Stage == 1){
+			Cheng3.Pieces[pid-1] = -1;  //第一阶段，被吃
+		}else{
+			Cheng3.Pieces[pid-1] = 0;   //第二阶段，被吃
+		}
 	}
 
 	/**
@@ -64,6 +115,37 @@ var Cheng3 = function (row, col, color) {
 
 		return true;
 	}
+	/**
+	 * 获取第n行n列的具体坐标值
+	 * @param  {int} row 
+	 * @param  {int} col 
+	 * @return {array}     [x,y]
+	 */
+	this.getCordinate = function(row, col){
+		x = col*cell_width + out_width;
+		y = row*cell_width + out_width;
+		return [x, y];
+	}	
+
+	/**
+	 * 在第几行几列的位置上画棋子
+	 * @param  {int} row  从0开始
+	 * @param  {int} col  从0开始
+	 * @return {bool}     
+	 */
+	this._drawPiece = function(){
+		var dx = out_width + this.col*cell_width - (cell_width-piece_width)/2;
+		var dy = out_width + this.row*cell_width - (cell_width-piece_width)/2;
+		var imgurl = piece_imgs[color-1];
+		chess_svg.append('svg:image')
+	    	.attr('width', piece_width)
+	    	.attr('height', piece_width)
+	    	.attr('xlink:href', imgurl)
+	    	.attr('x', dx)
+	    	.attr('y', dy)
+	    	.attr('id', this.key);
+	}
+
 	/**
 	 * 是否能够合法移动到指定位置
 	 * @param  {int} row 
@@ -80,7 +162,44 @@ var Cheng3 = function (row, col, color) {
 	 * @return {bool}     
 	 */
 	this._drawZoomCross = function(row, col){
+		var cross_len = 10;
+		var zoomclass = 'zoom-'+row+'-'+col;
+		if((d3.select('#'+zoomclass)[0][0])){
+			return;
+		}
+		var cord = this.getCordinate(row, col);
+		var x = cord[0];
+		var y = cord[1];
+		var lines = [];
 
+		dx = x-piece_width/2;
+		dy = y-piece_width/2;
+		lines.push([[dx,dy], [dx+cross_len, dy]]);
+		lines.push([[dx, dy], [dx, dy+cross_len]]);
+
+		dx = x+piece_width/2;
+		dy = y-piece_width/2;
+		lines.push([[dx,dy], [dx-cross_len, dy]]);
+		lines.push([[dx, dy], [dx, dy+cross_len]]);		
+
+		dx = x-piece_width/2;
+		dy = y+piece_width/2;
+		lines.push([[dx,dy], [dx, dy-cross_len]]);
+		lines.push([[dx, dy], [dx+cross_len, dy]]);		
+
+		dx = x+piece_width/2;
+		dy = y+piece_width/2;
+		lines.push([[dx,dy], [dx, dy-cross_len]]);
+		lines.push([[dx, dy], [dx-cross_len, dy]]);
+
+		if(d3.select('.zoomnode')[0][0]){
+			var zoom_group = d3.select('.zoomnode');
+		}else{
+			var zoom_group = chess_svg.append('svg:g')
+			.attr("class", "zoomnode");
+		}
+
+		this._draw_lines(lines, 2, '#4E8DE3', zoom_group, zoomclass);
 	}
 	/**
 	 * 清除所有 选中状态的标志
@@ -96,7 +215,7 @@ var Cheng3 = function (row, col, color) {
      */
     this._draw_lines = function(lines, line_width, line_color, father_obj, zoom_class){
     	if(!line_width) line_width = 1;
-    	if(!line_color) line_color = linecolor;
+    	if(!line_color) line_color = 'rgb(0,0,0)';
     	if(!father_obj) father_obj = chess_svg;
 
     	for (j=0; j<lines.length; j++){
@@ -158,3 +277,9 @@ Cheng3.AllCheng3Ids = [
  * @type array
  */
 Cheng3.Pieces = Array();
+
+/**
+ * 下棋阶段，1为放棋阶段，2为走棋阶段
+ * @type {Number}
+ */
+Cheng3.Stage = 1;
