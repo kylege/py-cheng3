@@ -96,8 +96,18 @@ var Cheng3 = function (row, col, color) {
 			return false;
 		}
 		var pid = Cheng3.Pos2IdMap[key];
-
-		d3.select('#'+this.key).remove();
+		var row = this.row;
+		var col = this.col;
+		d3.select('#'+this.key).transition()
+    		.style('opacity', 0)
+    		.duration(1000)
+    		.each("end",function() {
+    			d3.select(this).remove();
+				if (Cheng3.Stage == 1){
+						Cheng3._drawEatMark(row, col);
+				}
+    		})
+    	
 		if (Cheng3.Stage == 1){
 			Cheng3.Pieces[pid-1] = -1;  //第一阶段，被吃
 		}else{
@@ -112,20 +122,30 @@ var Cheng3 = function (row, col, color) {
 	 * @return {bool}     成功移动返回true
 	 */
 	this.moveTo = function(row, col){
+		var cord = Cheng3.getCordinate(row, col);
+
+		var newkey = 'piece-'+this.color+'-'+row.toString()+col;
+		d3.select('#'+this.key)
+			.transition()
+			.attr('x',cord[0]-piece_width/2)
+			.attr('y',cord[1]-piece_width/2)
+			.attr('width',piece_width)
+			.attr('height',piece_width)
+			.each("end",function() { 
+				d3.select(this).attr('id', newkey);  // 这里id已经变了
+			});
+		var old_id = Cheng3.GetIdByPos(this.row, this.col);
+		Cheng3.Pieces[old_id] = 0;
+		var new_id = Cheng3.GetIdByPos(row, col);
+		Cheng3.Pieces[new_id] = this.color;
+		this._drawZoomCross(row, col);
+		this.row = row;
+		this.col = col;
+		this.key = newkey;
 
 		return true;
 	}
-	/**
-	 * 获取第n行n列的具体坐标值
-	 * @param  {int} row 
-	 * @param  {int} col 
-	 * @return {array}     [x,y]
-	 */
-	this.getCordinate = function(row, col){
-		x = col*cell_width + out_width;
-		y = row*cell_width + out_width;
-		return [x, y];
-	}	
+	
 
 	/**
 	 * 在第几行几列的位置上画棋子
@@ -141,10 +161,12 @@ var Cheng3 = function (row, col, color) {
 	    	.attr('width', piece_width)
 	    	.attr('height', piece_width)
 	    	.attr('xlink:href', imgurl)
-	    	.attr('x', dx)
-	    	.attr('y', dy)
+	    	.attr('x', dx-4)
+	    	.attr('y', dy-4)
 	    	.attr('id', this.key);
 	}
+
+
 
 	/**
 	 * 是否能够合法移动到指定位置
@@ -153,7 +175,14 @@ var Cheng3 = function (row, col, color) {
 	 * @return {bool}     
 	 */
 	this._canMoveTo = function(row, col){
-
+		var id = Cheng3.GetIdByPos(row, col);
+		if(!Cheng3.Pieces[id-1]){
+			return false;
+		}
+		if(Cheng3.Pieces[id-1] != 0){
+			return false;
+		}
+		return true;
 	}
 	/**
 	 * 画选中状态的标志
@@ -164,10 +193,10 @@ var Cheng3 = function (row, col, color) {
 	this._drawZoomCross = function(row, col){
 		var cross_len = 10;
 		var zoomclass = 'zoom-'+row+'-'+col;
-		if((d3.select('#'+zoomclass)[0][0])){
+		if((d3.select('.'+zoomclass)[0][0])){
 			return;
 		}
-		var cord = this.getCordinate(row, col);
+		var cord = Cheng3.getCordinate(row, col);
 		var x = cord[0];
 		var y = cord[1];
 		var lines = [];
@@ -199,7 +228,7 @@ var Cheng3 = function (row, col, color) {
 			.attr("class", "zoomnode");
 		}
 
-		this._draw_lines(lines, 2, '#4E8DE3', zoom_group, zoomclass);
+		Cheng3._draw_lines(lines, 2, '#4E8DE3', zoom_group, zoomclass);
 	}
 	/**
 	 * 清除所有 选中状态的标志
@@ -208,29 +237,60 @@ var Cheng3 = function (row, col, color) {
 	this._clearZoomCross = function(){
 		d3.select('.zoomnode').remove();
 	}
-	/**
-     * 画直线
-     * @param  {array} lines 直线坐标数组
-     * @return {bool}       
-     */
-    this._draw_lines = function(lines, line_width, line_color, father_obj, zoom_class){
-    	if(!line_width) line_width = 1;
-    	if(!line_color) line_color = 'rgb(0,0,0)';
-    	if(!father_obj) father_obj = chess_svg;
+}
 
-    	for (j=0; j<lines.length; j++){
-   			crossi = lines[j]
-   			var myLine = father_obj.append("svg:line")
-			    .attr("x1", crossi[0][0])
-			    .attr("y1", crossi[0][1])
-			    .attr("x2", crossi[1][0])
-			    .attr("y2", crossi[1][1])
-			    .style("stroke", line_color)
-			    .style("stroke-width", line_width)
-			    .attr('class', 'shape-render')
-			    .attr('class', zoom_class);
-   		}
-    }
+/**
+ * 画直线
+ * @param  {array} lines 直线坐标数组
+ * @return {bool}       
+ */
+Cheng3._draw_lines = function(lines, line_width, line_color, father_obj, zoom_class){
+	if(!line_width) line_width = 1;
+	if(!line_color) line_color = 'rgb(0,0,0)';
+	if(!father_obj) father_obj = chess_svg;
+
+	for (j=0; j<lines.length; j++){
+			crossi = lines[j]
+			var myLine = father_obj.append("svg:line")
+		    .attr("x1", crossi[0][0])
+		    .attr("y1", crossi[0][1])
+		    .attr("x2", crossi[1][0])
+		    .attr("y2", crossi[1][1])
+		    .style("stroke", line_color)
+		    .style("stroke-width", line_width)
+		    .attr('class', 'shape-render '+zoom_class)
+		}
+}
+
+/**
+ * 画被吃掉的红叉
+ * @param  {int} row 
+ * @param  {int} col 
+ * @return {bool}     
+ */
+Cheng3._drawEatMark = function(row, col){
+	var cross_len = 10;
+
+	var crossclass = 'cross-'+row+'-'+col;
+	if((d3.select('#'+crossclass)[0][0])){
+		return;
+	}
+	var cord = Cheng3.getCordinate(row, col);
+	var x = cord[0];
+	var y = cord[1];
+	var lines = [
+		[[x-cross_len, y-cross_len], [x+cross_len, y+cross_len]],
+		[[x+cross_len, y-cross_len], [x-cross_len, y+cross_len]]
+	];
+
+	if(d3.select('.crossnode')[0][0]){
+		var cross_group = d3.select('.crossnode');
+	}else{
+		var cross_group = chess_svg.append('svg:g')
+		.attr("class", "crossnode");
+	}
+
+	Cheng3._draw_lines(lines, 2, '#FF3333', cross_group, crossclass);
 }
 
 /**
@@ -238,7 +298,7 @@ var Cheng3 = function (row, col, color) {
  * @param {int} row 
  * @param {int} col 
  */
-Cheng3.prototype.GetIdByPos = function(row, col) {
+Cheng3.GetIdByPos = function(row, col) {
 	var key = row+'-'+col;
 	if (Cheng3.Pos2IdMap[key]){
 		return Cheng3.Pos2IdMap[key];
@@ -246,6 +306,18 @@ Cheng3.prototype.GetIdByPos = function(row, col) {
 		return -1;
 	}
 };
+
+/**
+ * 获取第n行n列的具体坐标值
+ * @param  {int} row 
+ * @param  {int} col 
+ * @return {array}     [x,y]
+ */
+Cheng3.getCordinate = function(row, col){
+	x = col*cell_width + out_width;
+	y = row*cell_width + out_width;
+	return [x, y];
+}
 
 /**
  * 格子坐标（行x列，从0开始）与棋子id号对应关系
@@ -283,3 +355,9 @@ Cheng3.Pieces = Array();
  * @type {Number}
  */
 Cheng3.Stage = 1;
+
+/**
+ * 当前选中棋子,棋子Cheng3类
+ * @type {Cheng3}
+ */
+Cheng3.ChoosenPieceKey = null;
