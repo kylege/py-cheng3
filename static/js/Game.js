@@ -118,9 +118,9 @@ function getCurPosition(e) {
  * @return {bool}   
  */
 function putClickHandler(e){
-	// if(is_waiting){
- //        return false;
- //    }
+	if(is_waiting){
+        return false;
+    }
 	var pos = getCurPosition(e);
 	var rowcol = getGridRowCol(pos);
     var row = rowcol[0];
@@ -128,10 +128,12 @@ function putClickHandler(e){
     var c3 = new Cheng3(row, col, my_piece_color);
     if(c3.canPut()){
     	c3.putPiece();
-
     	if(c3.isCheng3()){
-    		alert('cheng3.');
-    	}
+    		chess_svg[0][0].removeEventListener("click");
+            chess_svg[0][0].addEventListener("click", eatClickHandler, false);
+    	}else{
+            setColorActive(his_piece_color);
+        }
     }
     	
 };
@@ -141,6 +143,9 @@ function putClickHandler(e){
  * @return {[type]}   [description]
  */
 function eatClickHandler(e){
+    if(is_waiting){
+        return false;
+    }
 	var pos = getCurPosition(e);
 	var rowcol = getGridRowCol(pos);
     var row = rowcol[0];
@@ -151,6 +156,13 @@ function eatClickHandler(e){
     }
     var c3 = new Cheng3(row, col, his_piece_color);
     c3.remove();
+
+    chess_svg[0][0].removeEventListener("click");
+    if(Cheng3.Stage == 1){
+        chess_svg[0][0].addEventListener("click", putClickHandler, false);
+    }else{
+        chess_svg[0][0].addEventListener("click", moveClickHandler, false);
+    }
 }
 
 /**
@@ -159,6 +171,9 @@ function eatClickHandler(e){
  * @return {[type]}   [description]
  */
 function moveClickHandler(e){
+    if(is_waiting){
+        return false;
+    }
 	var pos = getCurPosition(e);
 	var rowcol = getGridRowCol(pos);
     var row = rowcol[0];
@@ -175,7 +190,12 @@ function moveClickHandler(e){
             piece.zoomOut();
         	ChessPiece.ChoosenPieceKey = null;
             // 发送数据
-            // gamemove(org_row, org_col, row, col);
+            gamemove(org_row, org_col, row, col);
+            if(piece.isCheng3()){
+                on_cheng3(my_piece_color);
+            }else{
+                setColorActive(his_piece_color);
+            }
         }else{  // 违反规则，不能走
             // 如果选中了自己的棋子，当成是重新选择棋子
             if (Cheng3.Pieces[pid-1] && Cheng3.Pieces[pid-1] == my_piece_color) {
@@ -205,6 +225,47 @@ function moveClickHandler(e){
     	}
     }
 }
+
+/**
+ * 设定哪一方该走棋
+ * @param {int} color 
+ */
+function setColorActive(color){
+    $('#piece_sign_top').removeClass('gamemove-status');
+    $('#piece_sign_bottom').removeClass('gamemove-status');
+    var piece_signs = $('#piece_sign_top');
+    if(color == my_piece_color){
+        piece_signs = $('#piece_sign_bottom');   
+    }
+    piece_signs.addClass('gamemove-status');
+
+    if(color == my_piece_color){
+        is_waiting = false;
+    }else{
+        is_waiting = true;
+    }
+}
+
+/**
+ * 走棋动作
+ * @param  {array} from 
+ * @param  {array} to
+ * @return {bool}     
+ */
+function gamemove(x1,y1,x2,y2){
+    chess_is_init = false;
+    var data = JSON.stringify({
+        room: room_name,
+        row1: x1,
+        col1: y1,
+        row2: x2,
+        col2: y2,
+        'type':'on_gamemove',
+    });
+    gamesocket.send(data);
+    
+}
+
 /**
  * 棋子成三了
  * @param  {int} color 成三方的棋子颜色，是我还是对方
@@ -212,9 +273,11 @@ function moveClickHandler(e){
  */
 function on_cheng3(msg){
 	if(msg.color == my_piece_color){
-		is_waiting = false;
+        setColorActive(my_piece_color);
+        chess_svg[0][0].removeEventListener("click");
+        chess_svg[0][0].addEventListener("click", eatClickHandler, false);
 	}else{
-		is_waiting = true;
+        setColorActive(his_piece_color);
 	}
 }
 /**
@@ -223,7 +286,17 @@ function on_cheng3(msg){
  * @return {[type]}     
  */
 function on_gameput(msg){
-
+    var row = parseInt(msg.row);
+    var col = parseInt(msg.col);
+    var pid = Cheng3.GetIdByPos(row, col);
+    if(!Cheng3.Pieces[pid-1] || Cheng3.Pieces[pid-1] != 0){
+        return false;
+    }
+    var c3 = new Cheng3(row, col, my_piece_color);
+    c3.putPiece();
+    if(!c3.isCheng3()){
+        setColorActive(my_piece_color);
+    }
 }
 /**
  * 对方吃我的棋
@@ -231,7 +304,15 @@ function on_gameput(msg){
  * @return {[type]}     [description]
  */
 function on_gameeat(msg){
-
+    var row = parseInt(msg.row);
+    var col = parseInt(msg.col);
+    var pid = Cheng3.GetIdByPos(row, col);
+    if(!Cheng3.Pieces[pid-1] || Cheng3.Pieces[pid-1] != my_piece_color){
+        return false;
+    }
+    var c3 = new Cheng3(row, col, my_piece_color);
+    c3.remove();
+    setColorActive(my_piece_color);
 }
 /**
  * 对方走棋
@@ -239,7 +320,38 @@ function on_gameeat(msg){
  * @return {[type]}     [description]
  */
 function on_gamemove(msg){
-
+    var row1 = parseInt(msg.row1);
+    var col1 = parseInt(msg.col1);
+    var row2 = parseInt(msg.row2);
+    var col2 = parseInt(msg.col2);
+    var pid1 = Cheng3.GetIdByPos(row1, col1);
+    var pid2 = Cheng3.GetIdByPos(row2, col2);
+    if(!Cheng3.Pieces[pid1-1] || Cheng3.Pieces[pid1-1] != his_piece_color){
+        return false;
+    }
+    if(!Cheng3.Pieces[pid2-1] || Cheng3.Pieces[pid2-1] != 0){
+        return false;
+    }
+    var c3 = new Cheng3(row1, col1, his_piece_color);
+    c3.moveTo(row2, col2);
+    if(!c3.isCheng3()){
+        setColorActive(my_piece_color);
+    }
+}
+/**
+ * 由放棋阶段转换到走棋阶段
+ * @return {bool} 
+ */
+function on_stagechange(){
+    Cheng3.Stage = 2;
+    for (var i = Cheng3.Pieces.length - 1; i >= 0; i--) {
+        if(Cheng3.Pieces[i] == -1){
+            Cheng3.Pieces[i] = 0;
+        }
+    };
+    setColorActive(my_piece_color == 1 ? my_piece_color : his_piece_color);
+    chess_svg[0][0].removeEventListener("click");
+    chess_svg[0][0].addEventListener("click", moveClickHandler, false);
 }
 
 $(function() {
