@@ -13,6 +13,7 @@ var chess_is_init = true;  //棋盘是不是没有走动过，如果没走动，
 //不同颜色棋子数量
 var pieces_count_his = 0;
 var pieces_count_my = 0;
+var offline_timeout;
 /**
  * 画6x6的棋盘
  * @return {bool} 
@@ -128,9 +129,12 @@ function putClickHandler(e){
     var c3 = new Cheng3(row, col, my_piece_color);
     if(c3.canPut()){
     	c3.putPiece();
+        //发送数据
+        gameput(row, col);
     	if(c3.isCheng3()){
     		chess_svg[0][0].removeEventListener("click");
             chess_svg[0][0].addEventListener("click", eatClickHandler, false);
+            on_cheng3(my_piece_color);
     	}else{
             setColorActive(his_piece_color);
         }
@@ -151,18 +155,25 @@ function eatClickHandler(e){
     var row = rowcol[0];
     var col = rowcol[1];
     var pid = Cheng3.GetIdByPos(row, col);
-    if(!Cheng3.Pieces[pid-1] || Cheng3.Pieces[pid-1] != his_piece_color){
+    if( Cheng3.Pieces[pid-1] != his_piece_color){
     	return;
     }
     var c3 = new Cheng3(row, col, his_piece_color);
+    var allcheng3 = Cheng3.isAllCheng3(his_piece_color);
+    //成三的一方可以吃掉另一方的一枚非成三的棋子（如果对方的棋子全部都是成三状态，那就可以吃掉对方任意一颗棋子）
+    if(!allcheng3 && c3.isCheng3()){  
+        return false;
+    }
     c3.remove();
-
-    chess_svg[0][0].removeEventListener("click");
+    //发送数据
+    gameeat(row, col);
+    chess_svg[0][0].removeEventListener("click", eatClickHandler, false);
     if(Cheng3.Stage == 1){
         chess_svg[0][0].addEventListener("click", putClickHandler, false);
     }else{
         chess_svg[0][0].addEventListener("click", moveClickHandler, false);
     }
+    setColorActive(his_piece_color);
 }
 
 /**
@@ -182,13 +193,13 @@ function moveClickHandler(e){
     // 如果之前有选中的，且和现在不同位置，则视为走棋
     if(Cheng3.ChoosenPieceKey 
     	&& ( Cheng3.ChoosenPieceKey.row != row || Cheng3.ChoosenPieceKey.col != col )){
-    	var piece = ChessPiece.ChoosenPieceKey;
+    	var piece = Cheng3.ChoosenPieceKey;
         org_row = piece.row;
         org_col = piece.col;
         if(piece._canMoveTo(row, col)){
             piece.moveTo(row, col);
             piece.zoomOut();
-        	ChessPiece.ChoosenPieceKey = null;
+        	Cheng3.ChoosenPieceKey = null;
             // 发送数据
             gamemove(org_row, org_col, row, col);
             if(piece.isCheng3()){
@@ -241,9 +252,43 @@ function setColorActive(color){
 
     if(color == my_piece_color){
         is_waiting = false;
+        $('#chess-grid svg').css('cursor', 'pointer'); 
     }else{
         is_waiting = true;
+        $('#chess-grid svg').css('cursor', 'default'); 
     }
+}
+
+/**
+ * 放棋动作
+ * @param  {[type]} x1 [description]
+ * @param  {[type]} y1 [description]
+ * @return {[type]}    [description]
+ */
+function gameput(x1, y1){
+    chess_is_init = false;
+    var data = JSON.stringify({
+        room: room_name,
+        row: x1,
+        col: y1,
+        'type':'on_gameput',
+    });
+    gamesocket.send(data);
+}
+/**
+ * 吃棋动作
+ * @param  {[type]} x1 [description]
+ * @param  {[type]} y1 [description]
+ * @return {[type]}    [description]
+ */
+function gameeat(x1, y1){
+    var data = JSON.stringify({
+        room: room_name,
+        row: x1,
+        col: y1,
+        'type':'on_gameeat',
+    });
+    gamesocket.send(data);
 }
 
 /**
@@ -265,19 +310,97 @@ function gamemove(x1,y1,x2,y2){
     gamesocket.send(data);
     
 }
+/**
+ * 发送聊天
+ * @return {} 
+ */
+function sendchat(){
+    var content = $('#chat-input').val();
+    $('#chat-input').val('');            
+    if (!content || room_status != 1) return;
+    $('#chat-div ul').append('<li class="mychat-li"></li>');
+    $('#chat-div ul li:last-child').text(content);
+    $('#chat-div ul').scrollTop($('#chat-div ul')[0].scrollHeight);
+    gamesocket.send(JSON.stringify({
+        room: room_name,
+        content: content,
+        'type':'on_chat',
+    }));
+}
+/**
+ * 对方离线
+ * @param  {string} msg 
+ * @return {bool}     
+ */
+function on_offline(msg){
+    is_waiting = true;
+    room_status = 0;
+    $('#status-span').text('对方离线');
+    $('#game-canvas').css('cursor', 'default');
+    $('#piece_sign_top').removeClass('gamemove-status');
+    $('#piece_sign_bottom').removeClass('gamemove-status');
+    $('#alert-title').text('对方离线');
+    offline_timeout = setTimeout(function(){
+       $('#alert-model-dom').data('id', 0).modal('show');
+    }, 2000);
+}
+/**
+ * 开始游戏
+ * @param  {string} msg 
+ * @return {bool}     
+ */
+function on_gamestart(msg){
+    clearTimeout(offline_timeout);
+    is_waiting = (my_piece_color==2) ? true : false;
+    room_status = 1;
+    $('#status-span').text('对方上线，游戏开始，放棋阶段');
+
+    if(!chess_is_init){
+        d3.selectAll('#chess-grid svg *').remove();
+        drawChessGrid();  //重画棋盘
+        d3.select('.zoomnode').remove();
+    }
+    $('#his_status_img').attr('src', status_imgs[his_piece_color-1]);
+    $('#my_status_img').attr('src', status_imgs[my_piece_color-1]);
+
+    setColorActive(1);
+}
+/**
+ * 游戏结束
+ * @param  {string} msg 
+ * @return {bool}     
+ */
+function on_gameover(msg){
+    is_waiting = true;
+    room_status = 2;
+    $('#status-span').text('游戏结束');
+    $('#piece_sign_top').removeClass('gamemove-status');
+    $('#piece_sign_bottom').removeClass('gamemove-status');
+    $('#chess-grid svg').css('cursor', 'default'); 
+
+    $('#alert-title').text('游戏结束');
+    $('#alert-model-dom').data('id', 0).modal('show');
+}
+window.onbeforeunload = function () {
+    gamesocket.close();
+    // event.returnValue = "You will lose any unsaved content";
+}
 
 /**
  * 棋子成三了
  * @param  {int} color 成三方的棋子颜色，是我还是对方
  * @return {[type]}       
  */
-function on_cheng3(msg){
-	if(msg.color == my_piece_color){
+function on_cheng3(color){
+	if(color == my_piece_color){
         setColorActive(my_piece_color);
-        chess_svg[0][0].removeEventListener("click");
+        chess_svg[0][0].removeEventListener("click", moveClickHandler, false);
+        chess_svg[0][0].removeEventListener("click", putClickHandler, false);
         chess_svg[0][0].addEventListener("click", eatClickHandler, false);
+        Cheng3.drawMsgAlert('请抓子')
 	}else{
         setColorActive(his_piece_color);
+        Cheng3.drawMsgAlert('对方抓子')
 	}
 }
 /**
@@ -286,16 +409,19 @@ function on_cheng3(msg){
  * @return {[type]}     
  */
 function on_gameput(msg){
+    chess_is_init = false;
     var row = parseInt(msg.row);
     var col = parseInt(msg.col);
     var pid = Cheng3.GetIdByPos(row, col);
-    if(!Cheng3.Pieces[pid-1] || Cheng3.Pieces[pid-1] != 0){
+    if(Cheng3.Pieces[pid-1] != 0){
         return false;
     }
-    var c3 = new Cheng3(row, col, my_piece_color);
+    var c3 = new Cheng3(row, col, his_piece_color);
     c3.putPiece();
     if(!c3.isCheng3()){
         setColorActive(my_piece_color);
+    }else{
+        on_cheng3(his_piece_color);
     }
 }
 /**
@@ -307,7 +433,7 @@ function on_gameeat(msg){
     var row = parseInt(msg.row);
     var col = parseInt(msg.col);
     var pid = Cheng3.GetIdByPos(row, col);
-    if(!Cheng3.Pieces[pid-1] || Cheng3.Pieces[pid-1] != my_piece_color){
+    if( Cheng3.Pieces[pid-1] != my_piece_color){
         return false;
     }
     var c3 = new Cheng3(row, col, my_piece_color);
@@ -326,16 +452,20 @@ function on_gamemove(msg){
     var col2 = parseInt(msg.col2);
     var pid1 = Cheng3.GetIdByPos(row1, col1);
     var pid2 = Cheng3.GetIdByPos(row2, col2);
-    if(!Cheng3.Pieces[pid1-1] || Cheng3.Pieces[pid1-1] != his_piece_color){
+    if( Cheng3.Pieces[pid1-1] != his_piece_color){
         return false;
     }
-    if(!Cheng3.Pieces[pid2-1] || Cheng3.Pieces[pid2-1] != 0){
+    if( Cheng3.Pieces[pid2-1] != 0){
         return false;
     }
     var c3 = new Cheng3(row1, col1, his_piece_color);
+    c3._clearZoomCross();  // 清掉我这边的标志
+    c3.zoomIn();
     c3.moveTo(row2, col2);
     if(!c3.isCheng3()){
         setColorActive(my_piece_color);
+    }else{
+         on_cheng3(his_piece_color);
     }
 }
 /**
@@ -349,9 +479,23 @@ function on_stagechange(){
             Cheng3.Pieces[i] = 0;
         }
     };
-    setColorActive(my_piece_color == 1 ? my_piece_color : his_piece_color);
-    chess_svg[0][0].removeEventListener("click");
+    setColorActive(1);
+    chess_svg[0][0].removeEventListener("click", eatClickHandler, false);
+    chess_svg[0][0].removeEventListener("click", putClickHandler, false);
     chess_svg[0][0].addEventListener("click", moveClickHandler, false);
+    d3.select('.crossnode').remove();
+    Cheng3.drawMsgAlert('走棋阶段');
+    $('#status-span').text('走棋阶段');
+}
+/**
+ * 聊天
+ * @param  {string} msg 
+ * @return {bool}     
+ */
+function on_chat(msg){
+    $('#chat-div ul').append('<li class="hischat-li"></li>');
+    $('#chat-div ul li:last-child').text(msg.content);
+    $('#chat-div ul').scrollTop($('#chat-div ul')[0].scrollHeight);
 }
 
 $(function() {
@@ -359,5 +503,60 @@ $(function() {
 	drawChessGrid();
 
 	chess_svg[0][0].addEventListener("click", putClickHandler, false);
+    if(room_status != 0){
+        setColorActive(1);
+    }
+    if(is_waiting ){
+        $('#chess-grid svg').css('cursor', 'default');
+    }
 
+    var WebSocket = window.WebSocket || window.MozWebSocket;
+        if (WebSocket) {
+            try {
+                gamesocket = new WebSocket(wsurl);
+            } catch (e) {
+                alert(e)
+            }
+    }
+
+    if (gamesocket) {
+        gamesocket.onopen = function(){  
+            //gamesocket.send(JSON.stringify({name:"yes"}));
+        }  
+        gamesocket.onmessage = function(event) {
+            // console.log(event.data);
+            var msg = JSON.parse(event.data)
+            switch(msg.type){
+                case 'online':
+                    on_online(msg);
+                    break;
+                case 'offline':
+                    on_offline(msg);
+                    break;
+                case 'on_gamestart':
+                    on_gamestart(msg);
+                    break;
+                case 'on_gamemove':
+                    on_gamemove(msg);
+                    break;
+                case 'on_gameput':
+                    on_gameput(msg);
+                    break;
+                case 'on_gameeat':
+                    on_gameeat(msg);
+                    break;
+                case 'on_gamestage':
+                    on_stagechange(msg);
+                    break;
+                case 'on_gameover':
+                    on_gameover(msg);
+                    break;
+                case 'on_chat':
+                    on_chat(msg);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
 });

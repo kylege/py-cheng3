@@ -135,9 +135,9 @@ var Cheng3 = function (row, col, color) {
 				d3.select(this).attr('id', newkey);  // 这里id已经变了
 			});
 		var old_id = Cheng3.GetIdByPos(this.row, this.col);
-		Cheng3.Pieces[old_id] = 0;
+		Cheng3.Pieces[old_id-1] = 0;
 		var new_id = Cheng3.GetIdByPos(row, col);
-		Cheng3.Pieces[new_id] = this.color;
+		Cheng3.Pieces[new_id-1] = this.color;
 		this._drawZoomCross(row, col);
 		this.row = row;
 		this.col = col;
@@ -175,14 +175,29 @@ var Cheng3 = function (row, col, color) {
 	 * @return {bool}     
 	 */
 	this._canMoveTo = function(row, col){
-		var id = Cheng3.GetIdByPos(row, col);
-		if(!Cheng3.Pieces[id-1]){
+		var id1 = Cheng3.GetIdByPos(this.row, this.col);
+		var id2 = Cheng3.GetIdByPos(row, col);
+		if(Cheng3.Pieces[id2-1] != 0){
 			return false;
 		}
-		if(Cheng3.Pieces[id-1] != 0){
+		var isline = false;
+		var indexdiff = 0;
+		for (var j = Cheng3.AllCheng3Ids.length - 1; j >= 0; j--) {
+				var ids = Cheng3.AllCheng3Ids[j];
+				var index1 = $.inArray(id1, ids);
+				var index2 = $.inArray(id2, ids);
+				if(index1 > -1 &&  index2> -1){
+					isline = true;
+					indexdiff = Math.abs(index2-index1);
+					break;
+				}
+		}
+		if(!isline){
+			return false;
+		}else if (indexdiff > 1){
 			return false;
 		}
-		return true;
+		return isline;
 	}
 	/**
 	 * 画选中状态的标志
@@ -292,6 +307,41 @@ Cheng3._drawEatMark = function(row, col){
 
 	Cheng3._draw_lines(lines, 2, '#FF3333', cross_group, crossclass);
 }
+/**
+ * 消息提示
+ * @param  {[type]} msg [description]
+ * @return {[type]}     [description]
+ */
+Cheng3.drawMsgAlert = function(msg){
+	var fontsize = 20;
+	var msgid = 'msg-alert';
+	if((d3.select('#'+msgid)[0][0])){
+		return;
+	}
+	var boxw = 3*cell_width+out_width;
+	var msg_group = chess_svg.append('svg:g')
+		.attr("class", "msgnode")
+		.attr('transform', 'translate('+boxw+','+boxw+')')
+	msg_group.append('circle')
+		.attr('r', cell_width)
+		.style('opacity', 0)
+	msg_group.append('title').text('消息提醒');
+	msg_group.append('text')
+		.style('text-anchor', 'middle')
+		.style('font-size', fontsize)
+		.attr('id', 'msg-alert')
+		.attr('dy', '.3em')
+		.attr('fill','red')
+		.text(msg)
+
+	d3.select('.msgnode').transition()
+		.style('opacity', 0)
+		.duration(1000)
+		.delay(2000)
+		.each("end",function() {
+			d3.select(this).remove();
+		})
+}
 
 /**
  * 根据行x列（从0开始）得到棋子位置的id号
@@ -318,6 +368,33 @@ Cheng3.getCordinate = function(row, col){
 	y = row*cell_width + out_width;
 	return [x, y];
 }
+/**
+ * 判断是否所有棋子都处于成三状态
+ * @param  {[type]}  user_color [description]
+ * @return {Boolean}            [description]
+ */
+Cheng3.isAllCheng3 = function(user_color){
+	for (var i=0; i<Cheng3.Pieces.length; i++){
+		if(Cheng3.Pieces[i] != user_color) continue;
+		var pid = i+1;
+		var isc3 = false;
+		for (var j = Cheng3.AllCheng3Ids.length - 1; j >= 0; j--) {
+				var ids = Cheng3.AllCheng3Ids[j];
+				if($.inArray(pid, ids) > -1){
+					if(Cheng3.Pieces[ids[0]-1] == user_color && Cheng3.Pieces[ids[1]-1] == user_color &&
+							Cheng3.Pieces[ids[2]-1] == user_color){
+						isc3 = true;
+						break;
+					}
+				}
+		};
+		if (!isc3){
+			return false;
+		}
+	}
+	return true;	
+}
+
 
 /**
  * 格子坐标（行x列，从0开始）与棋子id号对应关系

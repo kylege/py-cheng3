@@ -96,13 +96,3 @@ body {
 #chess-grid svg {
 	cursor: pointer;
 }
-#his_piece_count, #my_piece_count {
-	font-size: 28px;
-	font-style: bold;
-	padding: 2px 0 0 2px;
-	position: relative;;
-	top: 5px;
-	left: 1px;
-}
-#his_piece_count{
-}
