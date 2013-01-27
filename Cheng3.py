@@ -154,6 +154,8 @@ class Cheng3():
         return True
 
     def checkGameOver(self, user_color):
+        if self.Stage == 1:
+            return False
         count1,count2 = (0,0)
         for piece in self.Pieces:
             if piece == 1: count1 = count1+1

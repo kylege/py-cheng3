@@ -197,7 +197,7 @@ class GameSocketHandler(tornado.websocket.WebSocketHandler):
         room = GameSocketHandler.all_rooms[self.room_name]
         ret = room.chess_game.eatPiece(self.user_piece, int(row), int(col))
         if not ret.result:
-            if isLog: logging.info(u'放棋失败. '+ret.msg)
+            if isLog: logging.info(u'抓棋失败. '+ret.msg)
             return False
         else:
             socket = GameSocketHandler.socket_handlers[self.hiskey]
@@ -213,6 +213,8 @@ class GameSocketHandler(tornado.websocket.WebSocketHandler):
             socket.write_message({'type':'on_gamestage'})
             self.write_message({'type':'on_gamestage'})
             self._check_gameover(1)
+        else:
+            self._check_gameover(self.his_piece)
 
     '''检查是否结束'''
     def _check_gameover(self, user_color):
